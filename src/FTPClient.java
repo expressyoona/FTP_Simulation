@@ -1,7 +1,4 @@
-import java.io.InputStream;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
-import java.io.OutputStream;
+import java.io.*;
 import java.net.Socket;
 import java.util.Scanner;
 
@@ -17,6 +14,7 @@ public class FTPClient {
             OutputStream outputStream;
             ObjectOutputStream objectOutputStream;
             ObjectInputStream objectInputStream;
+            FTPResponse response = null;
             while (true) {
                 Scanner scanner = new Scanner(System.in);
                 String command = "";
@@ -35,21 +33,38 @@ public class FTPClient {
                     command = scanner.nextLine();
                 }
 
+
+
                 outputStream = socket.getOutputStream();
                 objectOutputStream = new ObjectOutputStream(outputStream);
                 objectOutputStream.writeObject(command);
                 objectOutputStream.flush();
 
+
+
                 inputStream = socket.getInputStream();
                 objectInputStream = new ObjectInputStream(inputStream);
+
+                if (command.split(" ")[0].equals(FTPCommand.GET_ONE_FILE)) {
+                    String fileName = command.split(" ")[1];
+                    byte[] byteArr = new byte[1024];
+                    FileOutputStream fos = new FileOutputStream("client/" + fileName);
+                    BufferedOutputStream bos = new BufferedOutputStream(fos);
+                    int bytesReadLength = inputStream.read(byteArr, 0, byteArr.length);
+                    bos.write(byteArr, 0, bytesReadLength);
+                    bos.close();
+                }
                 String responseStr = (String) objectInputStream.readObject();
-                FTPResponse response = new FTPResponse(responseStr);
+                response = new FTPResponse(responseStr);
                 if (response.getResponseCode() == FTPResponseCode.NOT_LOGGED_IN) {
                     username = "";
                     password = "";
                 } else if (response.getResponseCode() == FTPResponseCode.USER_LOGGED_IN) {
                     loggedIn = true;
                 }
+
+
+
                 System.out.println(response);
                 scanner = scanner.reset();
             }

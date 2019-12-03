@@ -14,6 +14,7 @@ public class FTPMessage {
 
     // Custom
     public static final String NO_DIRECTORY_PROVIDED = "Please provide the directory.";
+    public static final String FILE_NOT_FOUND = "File not found in the server.";
     public static final String FILE_CONTENT = "Here comes the file content.";
     public static final String SPECIFY_USERNAME = "Please specify the username.";
     public static final String NEED_LOGIN = "Please login.";

@@ -21,11 +21,11 @@ public class FTPServer {
 
     private String rootDirectory;
     private String databaseUrl;
+    private long maxFileSize; // 5MB = 5 * 1024 bytes
 
     public FTPServer() {
         try {
             System.out.println("Loading config...");
-
 
             FileReader fileReader = new FileReader(FTPConfiguration.CONFIGURATION_FILE);
             Properties prop = new Properties();
@@ -33,9 +33,8 @@ public class FTPServer {
             rootDirectory = prop.getProperty("ROOT_DIR", FTPConfiguration.DEFAULT_ROOT_DIR);
             boolean writeMode = prop.getProperty("WRITE_MODE").equals("YES");
             databaseUrl = prop.getProperty("DATABASE_URL");
+            maxFileSize = Long.valueOf(prop.getProperty("MAX_FILE_SIZE"));
 
-            System.out.println("Loading database...");
-            // verifyUser("123", "123");
             File root = new File(rootDirectory);
             if (!root.exists()) {
                 System.out.println("Root folder does not exist. Creating...");
@@ -56,6 +55,22 @@ public class FTPServer {
         }
     }
 
+    public String getDatabaseUrl() {
+        return databaseUrl;
+    }
+
+    public void setDatabaseUrl(String databaseUrl) {
+        this.databaseUrl = databaseUrl;
+    }
+
+    public long getMaxFileSize() {
+        return maxFileSize;
+    }
+
+    public void setMaxFileSize(long maxFileSize) {
+        this.maxFileSize = maxFileSize;
+    }
+
     private Connection getDatabaseConnection(String url) {
         try {
             return DriverManager.getConnection(url);
@@ -74,15 +89,15 @@ public class FTPServer {
             }
             Statement statement = con.createStatement();
             String SQL = "SELECT password FROM Account WHERE username LIKE '" + username + "';";
-            System.out.println(SQL);
+            // System.out.println(SQL);
             ResultSet resultSet = statement.executeQuery(SQL);
             while (resultSet.next()) {
                 String data = resultSet.getString("password");
                 if (data.equals(toMd5(password))) {
-                    System.out.println("Correct");
+                    System.out.println(username + " has been logged in!");
                     return true;
                 } else {
-                    System.out.println("Wrong password");
+                    // System.out.println("Wrong password");
                     return false;
                 }
             }
@@ -248,10 +263,20 @@ class ServerService extends Thread {
                 case FTPCommand.READ_ONE_FILE: {
                     if (params.length == 1) {
                         response.setResponseCode(FTPResponseCode.PARAMETER_ERROR);
-                        response.setMessage(FTPMessage.NO_DIRECTORY_PROVIDED);
+                        response.setMessage(FTPMessage.FILE_NOT_FOUND);
                     } else {
                         String file = params[1];
                         return readTextFile(file);
+                    }
+                    break;
+                }
+                case FTPCommand.GET_ONE_FILE: {
+                    if (params.length == 1) {
+                        response.setResponseCode(FTPResponseCode.PARAMETER_ERROR);
+                        response.setMessage(FTPMessage.NO_DIRECTORY_PROVIDED);
+                    } else {
+                        String file = params[1];
+                        return sendOneFile(file);
                     }
                     break;
                 }
@@ -322,6 +347,7 @@ class ServerService extends Thread {
         return format.format(d);
     }
 
+    // OK
     private FTPResponse readTextFile(String fileName) throws IOException {
         FTPResponse response = new FTPResponse();
         String content = null;
@@ -339,5 +365,34 @@ class ServerService extends Thread {
             response.setListFile(result);
         }
         return response;
+    }
+
+    // OK. But need to improve
+    private FTPResponse sendOneFile(String fileName) {
+        try {
+            FTPResponse response = new FTPResponse();
+            String path = Paths.get(currentPath, fileName).toString();
+            File fi = new File(path);
+            if (!fi.exists()) {
+                response.setResponseCode(FTPResponseCode.PARAMETER_ERROR);
+                response.setMessage(FTPMessage.FILE_NOT_FOUND);
+            } else {
+                long start = System.currentTimeMillis();
+                byte[] byteArr = new byte[(int) fi.length()];
+                BufferedInputStream bis = new BufferedInputStream(new FileInputStream(fi));
+                bis.read(byteArr, 0, byteArr.length);
+                OutputStream os = outputStream;
+                os.write(byteArr, 0, byteArr.length);;
+                os.flush();
+                long end = System.currentTimeMillis();
+                float total = (end - start)/1000.0f;
+                response.setResponseCode(FTPResponseCode.FILE_STATUS_OK);
+                response.setMessage("Transferred " + byteArr.length + " bytes in " + total + " seconds.");
+            }
+            return response;
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return null;
     }
 }

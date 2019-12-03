@@ -8,6 +8,8 @@ public class FTPCommand {
     public static final String RENAME_FILE = "rename";
     public static final String READ_ONE_FILE = "cat";
     public static final String LIST_DIRECTORY = "ls"; // --> 226: Directory send OK.
+    public static final String GET_ONE_FILE = "get";
+    public static final String SEND_ONE_FILE = "put";
 
     public static final String GET_WORKING_DIRECTORY = "pwd"; // --> 257: "/path/to/file" is the current directory
     public static final String SPECIFY_PASSWORD = "password";
