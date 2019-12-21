@@ -65,4 +65,11 @@ public class FTPResponse {
         }
         return toStr;
     }
+
+    public static FTPResponse permissionDenied() {
+        FTPResponse response = new FTPResponse();
+        response.setResponseCode(FTPResponseCode.PERMISSION_DENIED);
+        response.setMessage(FTPMessage.PERMISSION_DENIED);
+        return response;
+    }
 }

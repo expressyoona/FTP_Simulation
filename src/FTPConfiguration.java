@@ -5,4 +5,5 @@ public class FTPConfiguration {
     public static final String CONFIGURATION_FILE = "config.properties";
     public static final String DEFAULT_ROOT_DIR = "ftp";
     public static final String DATE_PATTERN = "MMM dd HH:mm";
+
 }

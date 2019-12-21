@@ -9,9 +9,12 @@
 * dir: List contents of remote directory
 * get/recv: Receive file
 * help: Display local help information(Developing)
-* mget: Get multiple file
+* ls: List directory(current directory is default)
 * mkdir: Make directory on remote machine
 * put/send: Send one file
 * rename: Rename file
 * rmdir: Remove directory on remote machine
 
+## Account:
+* admin/123
+* guest/
