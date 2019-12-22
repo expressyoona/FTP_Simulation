@@ -23,6 +23,7 @@ public class FTPServer {
     private String databaseUrl;
     private long maxFileSize; // 5MB = 5 * 1024 bytes
     private boolean writeMode;
+    private int maximumAuthenticationTime;
 
     public FTPServer() {
         try {
@@ -33,6 +34,8 @@ public class FTPServer {
             writeMode = prop.getProperty("WRITE_MODE").equals("YES");
             databaseUrl = prop.getProperty("DATABASE_URL");
             maxFileSize = Long.valueOf(prop.getProperty("MAX_FILE_SIZE"));
+            maximumAuthenticationTime = Integer.valueOf(prop.getProperty("MAX_RETRY_LOGIN"));
+            fileReader.close();
 
             File root = new File(rootDirectory);
             if (!root.exists()) {
@@ -61,6 +64,10 @@ public class FTPServer {
         return writeMode;
     }
 
+    public int getMaximumAuthenticationTime() {
+        return maximumAuthenticationTime;
+    }
+
     private Connection getDatabaseConnection() {
         try {
             return DriverManager.getConnection(databaseUrl);
@@ -78,12 +85,12 @@ public class FTPServer {
                 System.out.println("Can't establish connection to database!");
             }
             Statement statement = con.createStatement();
-            String SQL = String.format("SELECT password FROM tbluser WHERE username LIKE '%s'", user.getUsername());
+            String SQL = String.format("SELECT password, id FROM tbluser WHERE username LIKE '%s'", user.getUsername());
             ResultSet resultSet = statement.executeQuery(SQL);
             if (resultSet.next()) {
                 String password = resultSet.getString("password");
                 if (password.equals(toMd5(user.getPassword()))) {
-                    user.setId(resultSet.getInt(1));
+                    user.setId(resultSet.getInt("id"));
                 }
             }
         } catch (Exception e) {
@@ -145,11 +152,12 @@ class ServerService extends Thread {
     private String currentPath;
     private boolean isVerified = false;
     private boolean isDisconnected = false;
-
+    private int count;
     private UserEntity client;
 
     public ServerService(FTPServer server, Socket socket, String rootPath) {
         try {
+            this.count = 0;
             this.server = server;
             this.socket = socket;
             this.rootPath = rootPath;
@@ -191,9 +199,9 @@ class ServerService extends Thread {
         FTPResponse response = new FTPResponse();
         s = s.toLowerCase();
         String[] params = s.split(" ");
-        String commandName = params[0];
+        String command = params[0];
         if (!isVerified) {
-            if (commandName.equals(FTPCommand.CONNECT)) {
+            if (command.equals(FTPCommand.USER)) {
                 if (params.length == 1) {
                     response.setResponseCode(FTPResponseCode.PARAMETER_ERROR);
                     response.setMessage(FTPMessage.SPECIFY_USERNAME);
@@ -202,17 +210,25 @@ class ServerService extends Thread {
                     response.setResponseCode(FTPResponseCode.USERNAME_OK_NEED_PASSWORD);
                     response.setMessage(FTPMessage.SPECIFY_PASSWORD);
                 }
-            } else if (commandName.equals(FTPCommand.SPECIFY_PASSWORD)) {
+            } else if (command.equals(FTPCommand.PASS)) {
                 if (params.length > 1) {
                     client.setPassword(params[1]);
                     client = server.verifyUser(client);
+                    System.out.println("Client ID = " + client.getId());
                     if (client.getId() != -1) {
                         response.setResponseCode(FTPResponseCode.USER_LOGGED_IN);
                         response.setMessage(FTPMessage.LOGIN_CORRECT);
                         isVerified = true;
                     } else {
-                        response.setResponseCode(FTPResponseCode.NOT_LOGGED_IN);
-                        response.setMessage(FTPMessage.LOGIN_INCORRECT);
+                        count++;
+                        if (count < server.getMaximumAuthenticationTime()) {
+                            response.setResponseCode(FTPResponseCode.NOT_LOGGED_IN);
+                            response.setMessage(FTPMessage.LOGIN_INCORRECT);
+                        } else {
+                            response.setResponseCode(FTPResponseCode.LOGGED_OUT);
+                            response.setMessage(FTPMessage.GOODBYE);
+                            isDisconnected = true;
+                        }
                     }
                 } else {
                     response.setResponseCode(FTPResponseCode.PARAMETER_ERROR);
@@ -225,7 +241,7 @@ class ServerService extends Thread {
             return response;
         } else {
             // Verify == True
-            switch (commandName) {
+            switch (command) {
                 case FTPCommand.CHANGE_DIRECTORY: {
                     if (params.length == 1) {
                         response.setResponseCode(FTPResponseCode.PARAMETER_ERROR);

@@ -1,5 +1,3 @@
-import udp.Client;
-
 import java.io.*;
 import java.net.Socket;
 import java.net.UnknownHostException;
@@ -44,7 +42,7 @@ public class FTPClient {
                 command = "";
                 // Check if logged in or not
                 if (!loggedIn) {
-                    authenticate();
+                    sendAuthenticateInformation();
                 } else {
                     System.out.print("ftp/" + currentServerPath + "> ");
                     command = scanner.nextLine();
@@ -73,13 +71,16 @@ public class FTPClient {
 
                 String responseStr = (String) objectInputStream.readObject();
                 response = new FTPResponse(responseStr);
+                System.out.println(response);
                 if (response.getResponseCode() == FTPResponseCode.NOT_LOGGED_IN) {
                     username = "";
                     password = "";
                 } else if (response.getResponseCode() == FTPResponseCode.USER_LOGGED_IN) {
                     loggedIn = true;
+                } else if (response.getResponseCode() == FTPResponseCode.LOGGED_OUT) {
+                    System.exit(0);
                 }
-                System.out.println(response);
+
 
                 scanner = scanner.reset();
             }
@@ -92,15 +93,15 @@ public class FTPClient {
         }
     }
 
-    private void authenticate() {
+    private void sendAuthenticateInformation() {
         if (username.isEmpty()) {
             System.out.print("ftp/" + currentServerPath + "> Enter username: ");
             username = scanner.nextLine();
-            command += FTPCommand.CONNECT + " " + username;
+            command += FTPCommand.USER + " " + username;
         } else if (password.isEmpty()) {
             System.out.print("ftp/" + currentServerPath + "> Enter password: ");
             password = scanner.nextLine();
-            command += FTPCommand.SPECIFY_PASSWORD + " " + password;
+            command += FTPCommand.PASS + " " + password;
         }
     }
 
