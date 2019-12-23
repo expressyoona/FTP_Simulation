@@ -6,7 +6,7 @@ import java.util.List;
 public class FTPResponse {
     private int responseCode = -1;
     private List<String> listFile = new ArrayList<String>();;
-    private String message;
+    private String message = new String();
 
     public FTPResponse() {
         super();
@@ -58,7 +58,6 @@ public class FTPResponse {
         }
         toStr += this.getMessage();
         if (!listFile.isEmpty()) {
-            // toStr += listFile.toString();
             for(String fi : listFile) {
                 toStr += "\n" + fi;
             }

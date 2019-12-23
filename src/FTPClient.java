@@ -1,4 +1,5 @@
 import java.io.*;
+import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.UnknownHostException;
 import java.util.Scanner;
@@ -14,6 +15,7 @@ public class FTPClient {
 
     private Scanner scanner;
     private String command;
+    private String receiveFile;
 
     public FTPClient() {
         try {
@@ -59,29 +61,36 @@ public class FTPClient {
                 inputStream = socket.getInputStream();
                 objectInputStream = new ObjectInputStream(inputStream);
 
-                if (command.split(" ")[0].equals(FTPCommand.GET_ONE_FILE)) {
-                    String fileName = command.split(" ")[1];
-                    byte[] byteArr = new byte[1024];
-                    FileOutputStream fos = new FileOutputStream("client/" + fileName);
-                    BufferedOutputStream bos = new BufferedOutputStream(fos);
-                    int bytesReadLength = inputStream.read(byteArr, 0, byteArr.length);
-                    bos.write(byteArr, 0, bytesReadLength);
-                    bos.close();
+                if (Utils.getCommand(command).equals(FTPCommand.SEND_ONE_FILE)) {
+                    // Client send file. So data connection need run first
+                    String fileName = Utils.getCommandParameter(command);
+                    new FTPDataSender(FTPConfiguration.DATA_CONNECTION_PORT, fileName).start();
+                } else if (Utils.getCommand(command).equals(FTPCommand.GET_ONE_FILE)) {
+                    receiveFile = Utils.getCommandParameter(command);
                 }
 
                 String responseStr = (String) objectInputStream.readObject();
                 response = new FTPResponse(responseStr);
                 System.out.println(response);
-                if (response.getResponseCode() == FTPResponseCode.NOT_LOGGED_IN) {
-                    username = "";
-                    password = "";
-                } else if (response.getResponseCode() == FTPResponseCode.USER_LOGGED_IN) {
-                    loggedIn = true;
-                } else if (response.getResponseCode() == FTPResponseCode.LOGGED_OUT) {
-                    System.exit(0);
+                switch (response.getResponseCode()) {
+                    case FTPResponseCode.NOT_LOGGED_IN: {
+                        username = "";
+                        password = "";
+                        break;
+                    }
+                    case FTPResponseCode.USER_LOGGED_IN: {
+                        loggedIn = true;
+                        break;
+                    }
+                    case FTPResponseCode.LOGGED_OUT: {
+                        System.exit(0);
+                    }
+                    case FTPResponseCode.READY_FOR_TRANSFER: {
+                        // Ready for receive file
+                        new FTPDataReceiver(host, FTPConfiguration.DATA_CONNECTION_PORT, "client/download/" + receiveFile).start();
+                        break;
+                    }
                 }
-
-
                 scanner = scanner.reset();
             }
         } catch (UnknownHostException hostException) {
@@ -90,6 +99,8 @@ public class FTPClient {
             System.out.println("Stream error!");
         } catch (ClassNotFoundException classNotFoundException) {
             System.out.println("You have forgot the Response Class. Please attach it to the project!");
+        } catch (Exception e) {
+            e.printStackTrace();
         }
     }
 
@@ -101,12 +112,9 @@ public class FTPClient {
         } else if (password.isEmpty()) {
             System.out.print("ftp/" + currentServerPath + "> Enter password: ");
             password = scanner.nextLine();
+            // password = Utils.inputPassword();
             command += FTPCommand.PASS + " " + password;
         }
-    }
-
-    private void receiveFileFromServer() {
-
     }
 
     public static void main(String[] args) {

@@ -9,6 +9,7 @@ import java.math.BigInteger;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -16,6 +17,7 @@ import java.sql.*;
 import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.Date;
+import java.util.List;
 
 public class FTPServer {
 
@@ -24,17 +26,19 @@ public class FTPServer {
     private long maxFileSize; // 5MB = 5 * 1024 bytes
     private boolean writeMode;
     private int maximumAuthenticationTime;
+    private String datePattern;
 
     public FTPServer() {
         try {
             FileReader fileReader = new FileReader(FTPConfiguration.CONFIGURATION_FILE);
             Properties prop = new Properties();
             prop.load(fileReader);
-            rootDirectory = prop.getProperty("ROOT_DIR", FTPConfiguration.DEFAULT_ROOT_DIR);
+            rootDirectory = prop.getProperty("ROOT_DIR");
             writeMode = prop.getProperty("WRITE_MODE").equals("YES");
             databaseUrl = prop.getProperty("DATABASE_URL");
             maxFileSize = Long.valueOf(prop.getProperty("MAX_FILE_SIZE"));
             maximumAuthenticationTime = Integer.valueOf(prop.getProperty("MAX_RETRY_LOGIN"));
+            datePattern = prop.getProperty("DATE_PATTERN");
             fileReader.close();
 
             File root = new File(rootDirectory);
@@ -66,6 +70,10 @@ public class FTPServer {
 
     public int getMaximumAuthenticationTime() {
         return maximumAuthenticationTime;
+    }
+
+    public String getDatePattern() {
+        return datePattern;
     }
 
     private Connection getDatabaseConnection() {
@@ -184,7 +192,6 @@ class ServerService extends Thread {
                     objectOutputStream.writeObject(response);
                     objectOutputStream.flush();
                 } else {
-                    // System.out.println(client.getUsername() + " has been leave");
                     socket.close();
                     Thread.currentThread().interrupt();
                     break;
@@ -258,7 +265,6 @@ class ServerService extends Thread {
                 case FTPCommand.MAKE_DIRECTORY: {
                     if (server.isWriteMode()) {
                         if (params.length == 1) {
-                            System.out.println("Create a directory");
                             response.setResponseCode(FTPResponseCode.PARAMETER_ERROR);
                             response.setMessage(FTPMessage.NO_DIRECTORY_PROVIDED);
                         } else {
@@ -277,7 +283,7 @@ class ServerService extends Thread {
                             response.setMessage(FTPMessage.NO_DIRECTORY_PROVIDED);
                         } else {
                             String folder = params[1];
-                            return removeFolder(folder);
+                            return deleteFolder(folder);
                         }
                     } else {
                         return FTPResponse.permissionDenied();
@@ -337,14 +343,32 @@ class ServerService extends Thread {
                         response.setResponseCode(FTPResponseCode.PARAMETER_ERROR);
                         response.setMessage(FTPMessage.NO_DIRECTORY_PROVIDED);
                     } else {
-                        String file = params[1];
-                        response.setResponseCode(111);
-                        response.setMessage("Ready for transferring...");
-                        // return sendOneFile(file);
+                        String file = Paths.get(currentPath, params[1]).toString();
+                        response.setResponseCode(FTPResponseCode.READY_FOR_TRANSFER);
+                        new FTPDataSender(FTPConfiguration.DATA_CONNECTION_PORT, file).start();
                     }
                     break;
                 }
-                case FTPCommand.EXIT: case FTPCommand.QUIT: case FTPCommand.BYE: {
+                case FTPCommand.SEND_ONE_FILE: {
+                    if (params.length == 1) {
+                        response.setResponseCode(FTPResponseCode.PARAMETER_ERROR);
+                        response.setMessage(FTPMessage.NO_DIRECTORY_PROVIDED);
+                    } else {
+                        String userStorageFolder = Paths.get("ftp", "client_storage", String.valueOf(client.getId())).toString();
+                        File f = new File(userStorageFolder);
+                        if (!f.exists()) {
+                            f.mkdirs();
+                        }
+                        String file = Paths.get(f.toString(), params[1]).toString();
+                        new FTPDataReceiver(socket.getInetAddress().toString().replace("/", ""), FTPConfiguration.DATA_CONNECTION_PORT, file).start();
+                        response.setResponseCode(FTPResponseCode.CLOSING_DATA_CONNECTION_OR_SEND_FILE_FOLDER_OK);
+                        response.setMessage(FTPMessage.TRANSFER_COMPLETE);
+                    }
+                    break;
+                }
+                case FTPCommand.EXIT:
+                case FTPCommand.QUIT:
+                case FTPCommand.BYE: {
                     this.isDisconnected = true;
                     response.setResponseCode(FTPResponseCode.LOGGED_OUT);
                     response.setMessage(FTPMessage.LOGGED_OUT);
@@ -376,7 +400,7 @@ class ServerService extends Thread {
                 server.updateActivity(client.getId(), String.format("Renamed %s to %s", newFilename));
             }
         } else {
-            response.setResponseCode(FTPResponseCode.INVALID_FILENAME);
+            response.setResponseCode(FTPResponseCode.PERMISSION_DENIED);
             response.setMessage(FTPMessage.NO_SUCH_FILE_OR_DIRECTORY);
         }
         return response;
@@ -387,30 +411,13 @@ class ServerService extends Thread {
         FTPResponse response = new FTPResponse();
         File fi = new File(Paths.get(currentPath, file).toString());
         if (!fi.exists()) {
-            response.setResponseCode(FTPResponseCode.INVALID_FILENAME);
+            response.setResponseCode(FTPResponseCode.PERMISSION_DENIED);
             response.setMessage(FTPMessage.NO_SUCH_FILE_OR_DIRECTORY);
         } else {
             if (fi.delete()) {
                 response.setResponseCode(FTPResponseCode.COMMAND_SUCCESSFULLY);
                 response.setMessage(String.format(FTPMessage.DELETED_FOLDER_OR_FILE, file));
                 server.updateActivity(client.getId(), String.format("Deleted %s", file));
-            }
-        }
-        return response;
-    }
-
-    // Remove a folder
-    private FTPResponse removeFolder(String folder) {
-        FTPResponse response = new FTPResponse();
-        File fi = new File(Paths.get(currentPath, folder).toString());
-        if (!fi.exists()) {
-            response.setResponseCode(FTPResponseCode.INVALID_FILENAME);
-            response.setMessage(FTPMessage.NO_SUCH_FILE_OR_DIRECTORY);
-        } else {
-            if (fi.delete()) {
-                response.setResponseCode(FTPResponseCode.COMMAND_SUCCESSFULLY);
-                response.setMessage(String.format(FTPMessage.DELETED_FOLDER_OR_FILE, folder));
-                server.updateActivity(client.getId(), String.format("Deleted %s", folder));
             }
         }
         return response;
@@ -460,7 +467,7 @@ class ServerService extends Thread {
             response.setMessage(FTPMessage.PERMISSION_DENIED);
         } else {
             File fi = new File(currentPath);
-            response.setResponseCode(FTPResponseCode.CLOSING_DATA_CONNECTION_OR_SEND_DIR_OK);
+            response.setResponseCode(FTPResponseCode.CLOSING_DATA_CONNECTION_OR_SEND_FILE_FOLDER_OK);
             response.setMessage(FTPMessage.CHANGED_DIRECTORY);
             currentPath = fi.getParent();
         }
@@ -484,7 +491,7 @@ class ServerService extends Thread {
         List<String> listFileInString = new ArrayList<String>();
         File fi = new File(currentPath);
         for (File f : fi.listFiles()) {
-            listFileInString.add(f.length() + "\t" + formatDate(f.lastModified()) + "\t" + f.getName());
+            listFileInString.add(getSize(f) + "\t" + formatDate(f.lastModified()) + "\t" + f.getName());
         }
         response.setListFile(listFileInString);
         return response;
@@ -502,17 +509,44 @@ class ServerService extends Thread {
             response.setResponseCode(FTPResponseCode.FILE_STATUS_OK);
             response.setMessage(FTPMessage.DIRECTORY_LISTING);
             for (File f : fi.listFiles()) {
-                listFileInString.add(f.length() + "\t" + formatDate(f.lastModified()) + "\t" + f.getName());
+                listFileInString.add(getSize(f) + "\t" + formatDate(f.lastModified()) + "\t" + f.getName());
             }
             response.setListFile(listFileInString);
         }
         return response;
     }
 
+    private long getSize(File fi) {
+        if (fi.isFile()) {
+            return fi.length();
+        }
+        long S = 0;
+        for (File subFile : fi.listFiles()) {
+            S += getSize(subFile);
+        }
+        return S;
+    }
+
     private String formatDate(long ms) {
         Date d = new Date(ms);
-        SimpleDateFormat format = new SimpleDateFormat(FTPConfiguration.DATE_PATTERN);
+        SimpleDateFormat format = new SimpleDateFormat(server.getDatePattern());
         return format.format(d);
+    }
+
+    private FTPResponse deleteFolder(String folder) throws IOException {
+        FTPResponse response = new FTPResponse();
+        Path p = Paths.get(currentPath, folder);
+        File fi = new File(p.toString());
+        if (fi.exists()) {
+            Files.walk(p).sorted(Comparator.reverseOrder()).map(Path::toFile).forEach(File::delete);
+            response.setResponseCode(FTPResponseCode.COMMAND_SUCCESSFULLY);
+            response.setMessage(String.format(FTPMessage.DELETED_FOLDER_OR_FILE, folder));
+            server.updateActivity(client.getId(), String.format("Deleted %s", folder));
+        } else {
+            response.setResponseCode(FTPResponseCode.PERMISSION_DENIED);
+            response.setMessage(FTPMessage.NO_SUCH_FILE_OR_DIRECTORY);
+        }
+        return response;
     }
 
     // OK
@@ -553,7 +587,7 @@ class ServerService extends Thread {
                 os.write(byteArr, 0, byteArr.length);
                 os.flush();
                 long end = System.currentTimeMillis();
-                float total = (end - start)/1000.0f;
+                float total = (end - start) / 1000.0f;
                 response.setResponseCode(FTPResponseCode.FILE_STATUS_OK);
                 response.setMessage(String.format("Transferred %d bytes in %d seconds.", byteArr.length, total));
             }

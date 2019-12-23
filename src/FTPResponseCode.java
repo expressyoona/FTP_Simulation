@@ -7,7 +7,7 @@ public class FTPResponseCode {
     public static final int SERVICE_READY = 220; // When a new user send a request
     public static final int LOGGED_OUT = 221; // when user close/disconnect
     public static final int HELP_MESSAGE = 214;
-    public static final int CLOSING_DATA_CONNECTION_OR_SEND_DIR_OK = 226; // Requested file
+    public static final int CLOSING_DATA_CONNECTION_OR_SEND_FILE_FOLDER_OK = 226; // Requested file
     public static final int USER_LOGGED_IN = 230;
     public static final int COMMAND_SUCCESSFULLY = 250;
     public static final int CREATED_DIRECTORY_OR_GET_WORKING_DIRECTORY = 257; // Or get cwd
@@ -25,7 +25,5 @@ public class FTPResponseCode {
     public static final int PERMISSION_DENIED = 550; // Not allowed, failed to change directory
     public static final int INVALID_FILENAME = 553;
 
-    public static final int CONNECTION_REFUSED = 10061;
-    public static final int DIRECTORY_NOT_EMPTY = 10066;
-    public static final int USER_FULL = 10068;
+    public static final int READY_FOR_TRANSFER = 2019;
 }

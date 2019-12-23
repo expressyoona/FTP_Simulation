@@ -10,6 +10,7 @@ public class FTPMessage {
     public static final String CHANGED_DIRECTORY = "Directory successfully changed.";
     public static final String DIRECTORY_LISTING = "Here comes the directory listing.";
     public static final String SPECIFY_PASSWORD = "Please specify the password.";
+    public static final String TRANSFER_COMPLETE = "Transfer complete.";
 
     // Custom
     public static final String NO_DIRECTORY_PROVIDED = "Please provide the directory.";
