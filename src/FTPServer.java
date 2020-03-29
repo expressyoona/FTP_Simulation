@@ -4,6 +4,8 @@
  */
 
 
+import com.sun.istack.internal.NotNull;
+
 import java.io.*;
 import java.math.BigInteger;
 import java.net.ServerSocket;
@@ -85,6 +87,10 @@ public class FTPServer {
         return null;
     }
 
+    public String getRootDirectory() {
+        return rootDirectory;
+    }
+
     public UserEntity verifyUser(UserEntity user) throws SQLException {
         Connection con = null;
         try {
@@ -97,7 +103,7 @@ public class FTPServer {
             ResultSet resultSet = statement.executeQuery(SQL);
             if (resultSet.next()) {
                 String password = resultSet.getString("password");
-                if (password.equals(toMd5(user.getPassword()))) {
+                if (password.equals(Utils.toMd5(user.getPassword()))) {
                     user.setId(resultSet.getInt("id"));
                 }
             }
@@ -125,23 +131,6 @@ public class FTPServer {
         } catch (Exception e) {
             e.printStackTrace();
         }
-    }
-
-    private String toMd5(String sourceText) {
-        MessageDigest md = null;
-        try {
-            md = MessageDigest.getInstance("MD5");
-            byte[] messageDigest = md.digest(sourceText.getBytes());
-            BigInteger no = new BigInteger(1, messageDigest);
-            String hashtext = no.toString(16);
-            while (hashtext.length() < 32) {
-                hashtext = "0" + hashtext;
-            }
-            return hashtext;
-        } catch (NoSuchAlgorithmException e) {
-            e.printStackTrace();
-        }
-        return null;
     }
 
     public static void main(String[] args) {
@@ -221,7 +210,7 @@ class ServerService extends Thread {
                 if (params.length > 1) {
                     client.setPassword(params[1]);
                     client = server.verifyUser(client);
-                    System.out.println("Client ID = " + client.getId());
+                    // System.out.println("Client ID = " + client.getId());
                     if (client.getId() != -1) {
                         response.setResponseCode(FTPResponseCode.USER_LOGGED_IN);
                         response.setMessage(FTPMessage.LOGIN_CORRECT);
@@ -346,20 +335,25 @@ class ServerService extends Thread {
                         String file = Paths.get(currentPath, params[1]).toString();
                         response.setResponseCode(FTPResponseCode.READY_FOR_TRANSFER);
                         new FTPDataSender(FTPConfiguration.DATA_CONNECTION_PORT, file).start();
+                        response.setMessage(FTPMessage.TRANSFER_COMPLETE);
                     }
                     break;
                 }
+                // Client send one file to server
                 case FTPCommand.SEND_ONE_FILE: {
                     if (params.length == 1) {
                         response.setResponseCode(FTPResponseCode.PARAMETER_ERROR);
                         response.setMessage(FTPMessage.NO_DIRECTORY_PROVIDED);
                     } else {
-                        String userStorageFolder = Paths.get("ftp", "client_storage", String.valueOf(client.getId())).toString();
+                        String userStorageFolder = Paths.get(server.getDatePattern(), "client_storage", String.valueOf(client.getId())).toString();
                         File f = new File(userStorageFolder);
                         if (!f.exists()) {
                             f.mkdirs();
                         }
-                        String file = Paths.get(f.toString(), params[1]).toString();
+                        String p[] = params[1].split("/");
+                        String fileName = p[p.length - 1];
+                        String file = Paths.get(f.toString(), fileName).toString();
+                        // System.out.println("File = " + file);
                         new FTPDataReceiver(socket.getInetAddress().toString().replace("/", ""), FTPConfiguration.DATA_CONNECTION_PORT, file).start();
                         response.setResponseCode(FTPResponseCode.CLOSING_DATA_CONNECTION_OR_SEND_FILE_FOLDER_OK);
                         response.setMessage(FTPMessage.TRANSFER_COMPLETE);
@@ -488,7 +482,7 @@ class ServerService extends Thread {
         response.setResponseCode(FTPResponseCode.FILE_STATUS_OK);
         response.setMessage(FTPMessage.DIRECTORY_LISTING);
 
-        List<String> listFileInString = new ArrayList<String>();
+        List<String> listFileInString = new ArrayList<>();
         File fi = new File(currentPath);
         for (File f : fi.listFiles()) {
             listFileInString.add(getSize(f) + "\t" + formatDate(f.lastModified()) + "\t" + f.getName());
@@ -562,14 +556,14 @@ class ServerService extends Thread {
             content = new String(Files.readAllBytes(Paths.get(f.getPath())));
             response.setResponseCode(FTPResponseCode.FILE_STATUS_OK);
             response.setMessage(FTPMessage.FILE_CONTENT);
-            List<String> result = new ArrayList<String>();
+            List<String> result = new ArrayList<>();
             result.add(content);
             response.setListFile(result);
         }
         return response;
     }
 
-    // OK. But need to improve
+    /*
     private FTPResponse sendOneFile(String fileName) {
         try {
             FTPResponse response = new FTPResponse();
@@ -597,5 +591,6 @@ class ServerService extends Thread {
         }
         return null;
     }
+     */
 
 }

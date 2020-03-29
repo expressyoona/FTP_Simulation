@@ -1,4 +1,5 @@
 public class FTPResponseCode {
+    public static final int READY_FOR_TRANSFER = 125;
     public static final int FILE_STATUS_OK = 150;
 
     public static final int OKAY = 200;
@@ -25,5 +26,5 @@ public class FTPResponseCode {
     public static final int PERMISSION_DENIED = 550; // Not allowed, failed to change directory
     public static final int INVALID_FILENAME = 553;
 
-    public static final int READY_FOR_TRANSFER = 2019;
+
 }

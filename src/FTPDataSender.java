@@ -2,13 +2,9 @@ import java.io.BufferedInputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.OutputStream;
+import java.net.BindException;
 import java.net.ServerSocket;
 import java.net.Socket;
-
-/*
- * Wait for connecting
- * And send file
- */
 
 public class FTPDataSender extends Thread {
 
@@ -17,8 +13,11 @@ public class FTPDataSender extends Thread {
 
     public FTPDataSender(int port, String file) {
         try {
+            // System.out.println("[SENDER] Serving at port " + port);
             myFile = new File(file);
             serverSocket = new ServerSocket(port);
+        } catch (BindException b) {
+            System.out.println("Port already in use: " + port);
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -35,6 +34,8 @@ public class FTPDataSender extends Thread {
             os.write(mybytearray, 0, mybytearray.length);
             os.flush();
             clientSocket.close();
+            serverSocket.close();
+            // System.out.println("Sent & closed socket...");
         } catch (Exception e) {
             e.printStackTrace();
         }

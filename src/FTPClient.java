@@ -2,9 +2,12 @@ import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.UnknownHostException;
+import java.nio.file.Paths;
 import java.util.Scanner;
 
 public class FTPClient {
+
+    public static String CLIENT_STORAGE_FOLDER = "client";
 
     private Socket socket;
     private String host;
@@ -19,6 +22,11 @@ public class FTPClient {
 
     public FTPClient() {
         try {
+            File f = new File(CLIENT_STORAGE_FOLDER);
+            if (!f.exists()) {
+                f.mkdir();
+            }
+
             loggedIn = false;
             username = new String();
             password = new String();
@@ -64,6 +72,7 @@ public class FTPClient {
                 if (Utils.getCommand(command).equals(FTPCommand.SEND_ONE_FILE)) {
                     // Client send file. So data connection need run first
                     String fileName = Utils.getCommandParameter(command);
+
                     new FTPDataSender(FTPConfiguration.DATA_CONNECTION_PORT, fileName).start();
                 } else if (Utils.getCommand(command).equals(FTPCommand.GET_ONE_FILE)) {
                     receiveFile = Utils.getCommandParameter(command);
@@ -98,7 +107,7 @@ public class FTPClient {
         } catch (IOException iOException) {
             System.out.println("Stream error!");
         } catch (ClassNotFoundException classNotFoundException) {
-            System.out.println("You have forgot the Response Class. Please attach it to the project!");
+            System.out.println("You have forgot the Response Class. Please attach it to the project and run again!");
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -111,13 +120,13 @@ public class FTPClient {
             command += FTPCommand.USER + " " + username;
         } else if (password.isEmpty()) {
             System.out.print("ftp/" + currentServerPath + "> Enter password: ");
-            password = scanner.nextLine();
-            // password = Utils.inputPassword();
+            // password = scanner.nextLine();
+            password = Utils.inputPassword();
             command += FTPCommand.PASS + " " + password;
         }
     }
 
     public static void main(String[] args) {
-        FTPClient ftpClient = new FTPClient();
+        new FTPClient();
     }
 }
