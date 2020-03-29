@@ -1,20 +1,27 @@
 ## List of commands:
 * cat: Read the content of one file
-* bye/exit/quit: Terminate ftp session and exit
+* bye: Terminate ftp session and exit
 * cd: Change remote working directory
 * cdup: Change remote working directory to parent directory
-* chmod: Change file permissions of remote file(Developing)
-* close/disconnect: Terminate FTP session
-* delete: Delete remote file
+* delete: Delete remote file(*)
 * dir: List contents of remote directory
-* get/recv: Receive file
-* help: Display local help information(Developing)
+* get: Receive file(file stored on client/download folder)
 * ls: List directory(current directory is default)
-* mkdir: Make directory on remote machine
-* put/send: Send one file
-* rename: Rename file
-* rmdir: Remove directory on remote machine
+* mkdir: Make directory(*)
+* put: Send one file(*)
+* rename: Rename file(*)
+* rmdir: Remove directory(*)
+
+## Developing
+* chmod: Change file permissions of remote file
+* help: Display local help information
 
 ## Account:
 * admin/123
 * guest/
+* hoang/123
+
+## Run
+* javac -cp ".:./library/*" *.java
+* java -cp ".:./library/*" FTPServer
+* java -cp ".:./library/*" FTPClient
